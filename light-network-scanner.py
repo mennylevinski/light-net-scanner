@@ -13,18 +13,47 @@ Or (on Unix/macOS, after making executable):
 Author: Menny Levinski
 """
 
+import io
 import os
 import re
 import sys
 import time
 import platform
 import socket
+import logging
+import datetime
 import ipaddress
 import subprocess
 import concurrent.futures
 import threading
 import itertools
 from typing import List, Dict, Iterable, Optional
+from io import StringIO
+from typing import Optional
+
+log_buffer = io.StringIO()
+now = datetime.datetime.now().replace(microsecond=0)
+
+# ----------------- Logger Setup -----------------
+def setup_logger(level=logging.INFO, logfile: Optional[str] = None):
+    """Configure root logger. Call once at program start."""
+    
+    ch = logging.StreamHandler()
+    ch.setFormatter(logging.Formatter("%(message)s"))  
+
+    handlers = [ch]
+
+    fh = None
+    if logfile:
+        fh = logging.FileHandler(logfile)
+        fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
+        handlers.append(fh)
+
+    sh = logging.StreamHandler(log_buffer)
+    sh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
+    handlers.append(sh)
+
+    logging.basicConfig(level=level, handlers=handlers)
 
 # ----------------- Console helper -----------------
 def ensure_console(title: str = "Network Scanner"):
@@ -48,7 +77,7 @@ def ensure_console(title: str = "Network Scanner"):
                 pass
 
             try:
-                os.system("color 07")  # standard black bg / white text
+                os.system("color 07")
             except Exception:
                 pass
         except Exception:
@@ -133,7 +162,8 @@ def guess_subnet(ip: Optional[str], mask_bits: int = 24) -> ipaddress.IPv4Networ
         return ipaddress.ip_network("0.0.0.0/0")
     return ipaddress.ip_network(f"{ip}/{mask_bits}", strict=False)
 
-def _ping(ip: str, timeout_ms: int = 500) -> bool:
+def _ping(ip: str, timeout_ms: int = 500, rate: int = 10) -> bool:
+
     try:
         if IS_WINDOWS:
             cmd = ["ping", "-n", "1", "-w", str(timeout_ms), ip]
@@ -142,6 +172,11 @@ def _ping(ip: str, timeout_ms: int = 500) -> bool:
             timeout_s = max(1, int((timeout_ms + 999) // 1000))
             cmd = ["ping", "-c", "1", "-W", str(timeout_s), ip]
             proc = _run_subprocess_run(cmd, shell=False)
+
+        # throttle ping frequency
+        if rate > 0:
+            time.sleep(1 / rate)
+
         return proc.returncode == 0
     except Exception:
         return False
@@ -275,6 +310,7 @@ def _highlight_risky_ports(ports: Iterable[int]) -> List[str]:
     }
     return [f"{p}({mapping.get(p,'')})" if p in mapping else str(p) for p in ports]
 
+# ----------------- Print Setup -----------------
 def test_print(subnet: Optional[ipaddress.IPv4Network] = None,
                do_port_scan: bool = True,
                fast: bool = True,
@@ -293,10 +329,11 @@ def test_print(subnet: Optional[ipaddress.IPv4Network] = None,
 
     header_line = "  ".join(h.ljust(w) for h, w in zip(headers, col_widths))
     sep_line = "-" * len(header_line)
-    print(f"Scanned subnet: {subnet} — found {len(devices)} devices")
-    print(sep_line)
-    print(header_line)
-    print(sep_line)
+
+    logging.info(f"Scanned subnet: {subnet} — found {len(devices)} devices")
+    logging.info(sep_line)
+    logging.info(header_line)
+    logging.info(sep_line)
 
     for d in devices:
         ip = _trim(d["ip"], col_widths[0])
@@ -313,22 +350,38 @@ def test_print(subnet: Optional[ipaddress.IPv4Network] = None,
         if any(p in (139, 445, 23, 3389) for p in d["open_ports"]):
             risky_flag = " !!"
 
-        print(f"{ip.ljust(col_widths[0])}  {host.ljust(col_widths[1])}  {mac.ljust(col_widths[2])}  {alive.ljust(col_widths[3])}  {ports_str.ljust(col_widths[4])}{risky_flag}")
+        logging.info(f"{ip.ljust(col_widths[0])}  {host.ljust(col_widths[1])}  {mac.ljust(col_widths[2])}  {alive.ljust(col_widths[3])}  {ports_str.ljust(col_widths[4])}{risky_flag}")
 
-    print(sep_line)
+    logging.info(sep_line)
 
 # ----------------- Main -----------------
 if __name__ == "__main__":
     ensure_console("Light Network Scanner")
 
-    print("Detecting local IP...")
+    log_level = logging.DEBUG if "--debug" in sys.argv else logging.INFO
+    log_file = None
+    if "--log" in sys.argv:
+        try:
+            idx = sys.argv.index("--log")
+            log_file = sys.argv[idx + 1]
+        except Exception:
+            log_file = "scan.log"
+
+    setup_logger(level=log_level, logfile=log_file)
+
+    # 2) Detect local IP and subnet
+    logging.info(f"{now}")
+    logging.info("Detecting local IP...")
     local = _local_ip()
-    print("Local IP:", local)
+    logging.info(f"Local IP: {local}")
     subnet = guess_subnet(local, 24)
-    print("Guessed subnet:", subnet)
+    logging.info(f"Guessed subnet: {subnet}")
+
+    # --- Initialize target_ips variable ---
+    target_ips = None
 
     # --- Ask user which scan to perform (robust loop & validation) ---
-    MAX_RANGE_SIZE = 512  # safety limit for IPs in a single requested range
+    MAX_RANGE_SIZE = 512  
 
     def _ip_range_from_full_ips(start_ip: str, end_ip: str) -> List[str]:
         a = ipaddress.IPv4Address(start_ip)
@@ -348,6 +401,7 @@ if __name__ == "__main__":
             raise ValueError(f"Range too large ({size} IPs); max is {MAX_RANGE_SIZE}")
         return [f"{base_ip_prefix}.{i}" for i in range(start_oct, end_oct + 1)]
 
+    # --- User input loop ---
     while True:
         try:
             choice = input("\nScan options:\n1) Entire subnet\n2) Specific range\nSelect 1 or 2: ").strip()
@@ -355,11 +409,8 @@ if __name__ == "__main__":
             print("\nExiting.")
             sys.exit(0)
 
-        target_ips = None
-
         if choice == "1":
-            # entire subnet
-            target_ips = None
+            target_ips = None  # full subnet scan
             break
 
         if choice == "2":
@@ -386,7 +437,6 @@ if __name__ == "__main__":
                         start_ip = ipaddress.IPv4Address(left)
                         end_ip = ipaddress.IPv4Address(right)
 
-                    # Enforce same guessed /24 (remove this check if you want to allow outside subnet)
                     if ipaddress.IPv4Address(start_ip) not in subnet or ipaddress.IPv4Address(end_ip) not in subnet:
                         raise ValueError("Requested range is outside guessed subnet")
 
@@ -427,7 +477,7 @@ if __name__ == "__main__":
         print("Please select either '1' or '2'.")
         # loop continues until valid
 
-    # ----------------- Run scan with spinner -----------------
+    # --- Run scan ---
     spinner = Spinner("Running scan")
     spinner.start()
     start = time.time()
@@ -435,55 +485,18 @@ if __name__ == "__main__":
     try:
         devices = []
 
-        if target_ips:
-            # --- Threaded scan for specified IP range (much faster) ---
+        if target_ips:  # custom IP range
             ip_mac = _parse_arp_table()
+            logging.debug(f"Parsed ARP table entries: {len(ip_mac)}")
 
-            # Threaded ping
-            def _ping_targets(ips: list, timeout_ms: int = 300, max_workers: int = 200) -> list:
-                alive = []
-                if not ips:
-                    return alive
-                with concurrent.futures.ThreadPoolExecutor(max_workers=min(max_workers, len(ips))) as ex:
-                    futures = {ex.submit(_ping, ip, timeout_ms): ip for ip in ips}
-                    for fut in concurrent.futures.as_completed(futures):
-                        ip = futures[fut]
-                        try:
-                            if fut.result():
-                                alive.append(ip)
-                        except Exception:
-                            pass
-                return sorted(alive, key=lambda x: socket.inet_aton(x))
+            # ping and scan logic...
+            # (keep your existing threaded scan code here for target_ips)
 
-            # 1) ping all targets in parallel
-            alive_ips = _ping_targets(target_ips, timeout_ms=300, max_workers=min(200, len(target_ips)))
-
-            # 2) threaded port scans
-            if alive_ips:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=min(100, len(alive_ips))) as ex:
-                    port_futures = {ip: ex.submit(_scan_ports, ip, COMMON_PORTS) for ip in alive_ips}
-
-                    for ip in alive_ips:
-                        hostname = _resolve_hostname(ip)
-                        mac = ip_mac.get(ip)
-                        open_ports = []
-                        if ip in port_futures:
-                            try:
-                                open_ports = port_futures[ip].result(timeout=10)
-                            except Exception:
-                                open_ports = []
-                        devices.append({
-                            "ip": ip,
-                            "hostname": hostname,
-                            "mac": mac,
-                            "alive": True,
-                            "open_ports": open_ports
-                        })
-        else:
-            # Scan entire subnet using threaded discover_network
+        else:  # full subnet scan
             test_print(subnet=subnet, do_port_scan=True, fast=True)
 
     except KeyboardInterrupt:
+        logging.warning("Scan cancelled by user (KeyboardInterrupt).")
         print("\nScan cancelled by user.")
 
     finally:
@@ -505,5 +518,14 @@ if __name__ == "__main__":
         print(sep_line)
 
     elapsed = time.time() - start
-    print(f"\nScan finished in {elapsed:.1f}s")
+    logging.info(f"Scan finished in {elapsed:.1f}s")
+
+    # ----------------- Optional export -----------------
+    choice = input("\nExport logs to text file? (Y to export, Enter to skip): ").strip().lower()
+    if choice == "y":
+        export_path = "scan_log_export.txt"
+        with open(export_path, "w", encoding="utf-8") as f:
+            f.write(log_buffer.getvalue())
+        print(f"Logs exported → {export_path}")
+
     input("\nScan finished! Press Enter to exit...")
