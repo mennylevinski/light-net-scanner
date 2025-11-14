@@ -36,4 +36,4 @@ Use responsibly and in compliance with your local governance.
 
 ---
 ## 🖼️ Screenshot
-![App Screenshot](netscanner_screenshot.jpg)
+![App Screenshot](netscanner_screenshot_v2.jpg)
