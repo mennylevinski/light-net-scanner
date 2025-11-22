@@ -7,9 +7,12 @@ Author: Menny Levinski
 Light Network Scanner
 Lightweight LAN discovery & port audit tool.
 
-Run:
-    python light-network-scanner.py
-    ./light-network-scanner.py
+Windows:
+python light-net-scanner.py
+
+Linux:
+chmod +x light-net-scanner.py
+./light-net-scanner.py
 """
 
 import io
@@ -528,4 +531,5 @@ if __name__ == "__main__":
         print(f"Logs exported → {export_path}")
 
     input("\nScan finished! Press Enter to exit...")
+
 
