@@ -203,13 +203,63 @@ def _parse_arp_table() -> Dict[str, str]:
         pass
     return ip_to_mac
 
-def _resolve_hostname(ip: str, timeout: float = 0.5) -> Optional[str]:
+def _resolve_hostname(ip: str, timeout: float = 2.0) -> str:
+    """
+    Try to resolve a hostname using:
+    1. Reverse DNS
+    2. NetBIOS (Linux + Samba tools)
+    3. mDNS (Linux + Avahi)
+    """
+
+    # 1) Reverse DNS (cross-platform, safest)
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
             fut = ex.submit(socket.gethostbyaddr, ip)
             return fut.result(timeout=timeout)[0]
     except Exception:
-        return None
+        pass
+
+    # Linux-only methods here
+    if platform.system().lower() == "windows":
+        return "-"  # Windows does not have nmblookup/avahi by default
+
+    # Helper: check if a command exists
+    def cmd_exists(cmd: str) -> bool:
+        return subprocess.call(
+            f"command -v {cmd} >/dev/null 2>&1", shell=True
+        ) == 0
+
+    # 2) NetBIOS (nmblookup)
+    if cmd_exists("nmblookup"):
+        try:
+            result = subprocess.check_output(
+                ["nmblookup", "-A", ip],
+                stderr=subprocess.DEVNULL,
+                timeout=timeout,
+                text=True
+            )
+            for line in result.splitlines():
+                if "<00>" in line and "GROUP" not in line:
+                    return line.split()[0]
+        except Exception:
+            pass
+
+    # 3) mDNS (avahi-resolve)
+    if cmd_exists("avahi-resolve-address"):
+        try:
+            result = subprocess.check_output(
+                ["avahi-resolve-address", ip],
+                stderr=subprocess.DEVNULL,
+                timeout=timeout,
+                text=True
+            ).strip()
+
+            if result and " " in result:
+                return result.split()[-1]
+        except Exception:
+            pass
+
+    return "-"
 
 def _scan_ports(ip: str, ports: Iterable[int], timeout: float = 0.5, max_workers: int = 100) -> List[int]:
     open_ports = []
@@ -304,9 +354,14 @@ def _highlight_risky_ports(ports: Iterable[int]) -> List[str]:
         21: "FTP",
         22: "SSH",
         23: "Telnet",
+        25: "SMTP",
+        69: "TFTP",
         80: "HTTP",
         139: "NetBIOS",
+        161: "SNMP",
+        389: "LDAP",
         445: "SMB",
+        1433: "MSSQL",
         3389: "RDP",
         5900: "VNC"
     }
@@ -324,7 +379,7 @@ def test_print(subnet: Optional[ipaddress.IPv4Network] = None,
     devices = discover_network(subnet=subnet, do_port_scan=do_port_scan, fast=fast, ports=ports)
 
     headers = ["IP", "Hostname", "MAC", "Alive", "Open Ports"]
-    col_widths = [15, 30, 17, 7, 30]
+    col_widths = [15, 30, 17, 7, 40]
 
     def _trim(s: str, w: int) -> str:
         return (s[: w - 3] + "...") if len(s) > w else s
@@ -346,13 +401,8 @@ def test_print(subnet: Optional[ipaddress.IPv4Network] = None,
             ports_str = ", ".join(_highlight_risky_ports(d["open_ports"]))
         else:
             ports_str = "-"
-        ports_str = _trim(ports_str, col_widths[4])
 
-        risky_flag = ""
-        if any(p in (139, 445, 23, 3389) for p in d["open_ports"]):
-            risky_flag = " !!"
-
-        logging.info(f"{ip.ljust(col_widths[0])}  {host.ljust(col_widths[1])}  {mac.ljust(col_widths[2])}  {alive.ljust(col_widths[3])}  {ports_str.ljust(col_widths[4])}{risky_flag}")
+        logging.info(f"{ip.ljust(col_widths[0])}  {host.ljust(col_widths[1])}  {mac.ljust(col_widths[2])}  {alive.ljust(col_widths[3])}  {ports_str.ljust(col_widths[4])}")
 
     logging.info(sep_line)
 
@@ -531,5 +581,3 @@ if __name__ == "__main__":
         print(f"Logs exported → {export_path}")
 
     input("\nScan finished! Press Enter to exit...")
-
-
