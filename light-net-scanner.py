@@ -506,9 +506,9 @@ def _ip_range_from_full_ips(start_ip: str, end_ip: str) -> List[str]:
 # ---- main scan loop ----
 while True:
     print("\nSelect scan type:")
-    print("1) LAN scanning")
-    print("2) Custom IP range")
-    print("3) Exit")
+    print("1 = LAN scanning")
+    print("2 = Custom IP range")
+    print("3 = Exit")
     scan_mode = input("\nEnter choice: ").strip()
 
     if scan_mode not in {"1", "2", "3"}:
@@ -628,4 +628,3 @@ while True:
             f.write(log_buffer.getvalue())
         print(f"Logs exported → {export_path}")
         continue
-
