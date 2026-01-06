@@ -58,7 +58,7 @@ def setup_logger(level=logging.INFO, logfile: Optional[str] = None):
     logging.basicConfig(level=level, handlers=handlers)
 
 # ======= Console helper =======
-def ensure_console(title: str = "VLAN Scanner"):
+def console(title: str = "VLAN Scanner"):
     """Ensure a console is available on Windows with black background / white text."""
     if sys.platform.startswith("win"):
         try:
@@ -464,7 +464,7 @@ def is_private_ip(ip: str) -> bool:
 
 # ======= Main =======
 if __name__ == "__main__":
-    ensure_("VLAN Scanner")
+    ensure_console("VLAN Scanner")
 
     log_level = logging.DEBUG if "--debug" in sys.argv else logging.INFO
     log_file = None
@@ -628,4 +628,3 @@ while True:
             f.write(log_buffer.getvalue())
         print(f"Logs exported → {export_path}")
         continue
-
