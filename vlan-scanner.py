@@ -506,7 +506,7 @@ def _ip_range_from_full_ips(start_ip: str, end_ip: str) -> List[str]:
 # ---- main scan loop ----
 while True:
     print("\nSelect scan type:")
-    print("1 = LAN scanning")
+    print("1 = VLAN scanning")
     print("2 = Custom IP range")
     print("3 = Exit")
     scan_mode = input("\nEnter choice: ").strip()
@@ -516,16 +516,16 @@ while True:
         continue
 
     if scan_mode == "1":
-        choice = input("\nStart full LAN scan? (Y/N): ").strip().upper()
+        choice = input("\nStart full VLAN scan? (Y/N): ").strip().upper()
         if choice not in ("Y", "N"):
             print("Invalid choice!")
             continue
         if choice != "Y":
-            print("LAN scan cancelled.")
+            print("VLAN scan cancelled.")
             input("Press Enter to exit...")
             break
 
-        spinner = Spinner("Running LAN scan")
+        spinner = Spinner("Running VLAN scan")
         spinner.start()
         start = time.time()
         try:
