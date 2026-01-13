@@ -8,11 +8,11 @@ Advanced Network Scanner:
 LAN discovery & port audit tool.
 
 Windows:
-python advanced-netscanner.py
+python advanced_net_scanner.py
 
 Linux:
-chmod +x advanced-netscanner.py
-python3 advanced-netscanner.py
+chmod +x advanced_net_scanner.py
+python3 advanced_net_scanner.py
 """
 
 import io
