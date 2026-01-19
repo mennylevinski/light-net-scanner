@@ -3,6 +3,7 @@
 
 """
 Author: Menny Levinski
+License: MIT (https://opensource.org/licenses/MIT)
 
 Advanced Network Scanner:
 LAN discovery & port audit tool.
@@ -526,7 +527,8 @@ if __name__ == "__main__":
     setup_logger(level=log_level, logfile=log_file)
 
     # --- Detect local IP and subnet ---
-    print(f"© 2025 Menny Levinski – MIT License\n")
+    print(f"Advanced Network Scanner – © 2025 Menny Levinski")
+    print("License: MIT (https://opensource.org/licenses/MIT)\n")
     logging.info(f"Date:{now}")
     interface = _first_interface()
     logging.info(f"Interface: {interface or 'N/A'}")
