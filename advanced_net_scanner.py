@@ -509,24 +509,29 @@ if __name__ == "__main__":
     log_level = logging.DEBUG if "--debug" in sys.argv else logging.INFO
     log_file = None
     if "--log" in sys.argv:
-        try:
-            idx = sys.argv.index("--log")
+        idx = sys.argv.index("--log")
+        if idx + 1 < len(sys.argv):
             log_file = sys.argv[idx + 1]
-        except Exception:
+        else:
             log_file = "scan.log"
 
     setup_logger(level=log_level, logfile=log_file)
 
     # --- Detect local IP and subnet ---
-    logging.info(f"{now}")
+    logging.info("Author: Menny Levinski\n")
+    logging.info(now)
     interface = _first_interface()
-    logging.info(f"Interface: {interface}")
+    logging.info(f"Interface: {interface or 'N/A'}")
     mac = _primary_mac()
-    logging.info(f"Local Mac: {mac}")
+    logging.info(f"Local MAC: {mac or 'N/A'}")
     local = _local_ip()
-    logging.info(f"Local IP: {local}")
-    subnet = guess_subnet(local, 24)
-    logging.info(f"Guessed subnet: {subnet}")
+    logging.info(f"Local IP: {local or 'N/A'}")
+
+    if local and ":" not in local:
+        subnet = guess_subnet(local, 24)
+        logging.info(f"Guessed subnet: {subnet}")
+    else:
+        logging.warning("Subnet guessing skipped (IPv6 or no IP)")
 
     # --- Initialize target_ips variable ---
     target_ips = None
