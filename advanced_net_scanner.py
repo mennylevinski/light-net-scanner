@@ -527,7 +527,6 @@ if __name__ == "__main__":
 
     # --- Detect local IP and subnet ---
     print(f"MIT License – © 2025 Menny Levinski\n")
-    logging.info(f"Date:{now}")
     interface = _first_interface()
     logging.info(f"Interface: {interface or 'N/A'}")
     mac = _primary_mac()
