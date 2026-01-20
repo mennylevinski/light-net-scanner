@@ -65,4 +65,4 @@ If Microsoft Defender SmartScreen appears:
 
 ---
 ## 🖼️ Screenshot
-![App Screenshot](netscanner_screenshot.png)
+![App Screenshot](media/netscanner_screenshot.png)
