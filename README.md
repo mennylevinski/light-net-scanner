@@ -45,6 +45,11 @@ If Microsoft Defender SmartScreen appears:
 - Click More info
 - Click Run anyway
 
+### Third Party License
+Python Software Foundation License Version 2  
+Copyright © 2001-2025 Python Software Foundation.  
+Source: https://docs.python.org/license.html
+
 ---
 
 ## 🧩 Installation Cross Platform
